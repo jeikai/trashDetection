@@ -32,7 +32,7 @@ const upload = multer({ storage: storage });
 
 app.post("/video", upload.single("video"), async (req, res) => {
   const videoPath = req.file.path;
-  const outputDir = "frames";
+  const outputDir = "uploads/frames";
   try {
     const result = await extractVideoToFrames(videoPath, outputDir);
     res.status(200).json({ message: result.message });
@@ -45,7 +45,7 @@ app.post("/video", upload.single("video"), async (req, res) => {
 app.post("/image", upload.any(), (req, res) => {
   const images = req.files.map((file) => file.path);
   console.log(images);
-  res.send("Images uploaded successfully");
+  res.json("Images uploaded successfully");
 });
 
 app.listen(7810, () => {
