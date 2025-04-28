@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 class CameraService {
   CameraController? _controller;
@@ -13,25 +12,38 @@ class CameraService {
   CameraController? get controller => _controller;
 
   Future<void> initializeCamera() async {
+    await dispose();
+
     try {
-      _cameras = await availableCameras();
-      if (_cameras!.isEmpty) {
+      // First check if we can access the camera plugin at all
+      try {
+        _cameras = await availableCameras();
+      } catch (e) {
+        print('Error accessing camera plugin: $e');
+        // Handle plugin missing case specifically
+        if (e.toString().contains('MissingPluginException')) {
+          throw Exception('Camera plugin not available. Please restart the app or check your installation.');
+        }
+        rethrow;
+      }
+
+      if (_cameras == null || _cameras!.isEmpty) {
         throw CameraException('No cameras available', 'No cameras found on device');
       }
 
-      // Use the first camera (usually the back camera)
+      // Initialize the camera controller
       _controller = CameraController(
-        _cameras![0],
+        _cameras!.first,
         ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
+        enableAudio: true,
       );
 
       await _controller!.initialize();
       _isInitialized = true;
-    } on CameraException catch (e) {
+    } catch (e) {
       _isInitialized = false;
-      throw Exception('Failed to initialize camera: ${e.description}');
+      print('Camera initialization error: $e');
+      throw e;
     }
   }
 
@@ -43,6 +55,7 @@ class CameraService {
     try {
       return await _controller!.takePicture();
     } on CameraException catch (e) {
+      print('Take picture error: ${e.description}');
       throw Exception('Failed to take picture: ${e.description}');
     }
   }
@@ -56,12 +69,21 @@ class CameraService {
       XFile picture = await _controller!.takePicture();
       return File(picture.path);
     } on CameraException catch (e) {
+      print('Capture frame error: ${e.description}');
       throw Exception('Failed to capture video frame: ${e.description}');
     }
   }
 
-  void dispose() {
-    _controller?.dispose();
-    _isInitialized = false;
+  Future<void> dispose() async {
+    try {
+      if (_controller != null) {
+        await _controller!.dispose();
+        _controller = null;
+      }
+    } catch (e) {
+      print('Error disposing camera controller: $e');
+    } finally {
+      _isInitialized = false;
+    }
   }
 }

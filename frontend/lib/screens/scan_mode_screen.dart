@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:frontend/constants/app_constants.dart';
 import 'package:frontend/constants/strings.dart';
-import 'package:frontend/models/detection_result.dart';
 import 'package:frontend/screens/help_screen.dart';
+import 'package:frontend/screens/result_screen.dart';
 import 'package:frontend/screens/picture_mode_screen.dart';
-import 'package:frontend/services/api_service.dart';
 import 'package:frontend/services/camera_service.dart';
 import 'package:frontend/services/permission_service.dart';
 import 'package:frontend/widgets/custom_button.dart';
-import 'package:frontend/widgets/detection_result_display.dart';
 import 'package:frontend/widgets/loading_indicator.dart';
 import 'package:frontend/config/theme.dart';
 
@@ -25,38 +23,60 @@ class ScanModeScreen extends StatefulWidget {
 class _ScanModeScreenState extends State<ScanModeScreen>
     with WidgetsBindingObserver {
   final CameraService _cameraService = CameraService();
-  final ApiService _apiService = ApiService();
   final PermissionService _permissionService = PermissionService();
 
   bool _isInitialized = false;
-  bool _isScanning = false;
-  bool _isProcessing = false;
-  bool _showTargetText = false;
+  bool _isRecording = false;
   String _errorMessage = '';
-  Timer? _scanTimer;
-  Timer? _frameTimer;
-  int _countdown = AppConstants.preparationTime;
+  Timer? _recordingTimer;
+  int _recordingDuration = 5; // 5 seconds for recording
+  int _countdown = 0;
   Timer? _countdownTimer;
-  DetectionResponse? _detectionResponse;
-  List<DetectionResult> _allDetections = [];
-  int _resultDisplayTime = AppConstants.resultDisplayTime;
-  Timer? _resultDisplayTimer;
+  XFile? _videoFile;
+  int _initRetryCount = 0;
+  final int _maxRetries = 3;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeCamera();
+    _initializeWithRetry();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Handle app lifecycle changes to properly manage camera resources
-    if (state == AppLifecycleState.inactive) {
+    if (_cameraService.controller == null) return;
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _stopRecordingIfNeeded();
       _cameraService.dispose();
       _isInitialized = false;
     } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
+      _initializeWithRetry();
+    }
+  }
+
+  Future<void> _initializeWithRetry() async {
+    if (_initRetryCount >= _maxRetries) {
+      setState(() {
+        _errorMessage = 'Failed to initialize camera after multiple attempts. Please restart the app.';
+        _initRetryCount = 0;
+      });
+      return;
+    }
+
+    try {
+      await _initializeCamera();
+    } catch (e) {
+      _initRetryCount++;
+      print('Camera init attempt $_initRetryCount failed: $e');
+
+      // Wait a bit longer between retries
+      await Future.delayed(Duration(seconds: _initRetryCount));
+      if (mounted) {
+        _initializeWithRetry();
+      }
     }
   }
 
@@ -73,6 +93,10 @@ class _ScanModeScreenState extends State<ScanModeScreen>
   }
 
   Future<void> _initializeCamera() async {
+    setState(() {
+      _errorMessage = '';
+    });
+
     final hasPermission = await _permissionService.requestCameraPermission();
     if (!hasPermission) {
       setState(() {
@@ -82,141 +106,131 @@ class _ScanModeScreenState extends State<ScanModeScreen>
     }
 
     try {
+      // Add a delay before initializing camera
+      // This can help with lifecycle issues
+      await Future.delayed(const Duration(milliseconds: 300));
+
       await _cameraService.initializeCamera();
-      setState(() {
-        _isInitialized = true;
-        _errorMessage = '';
-      });
-      // Start scanning immediately
-      _startScanCountdown();
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _errorMessage = '';
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = '${AppStrings.cameraError}: $e';
-        _isInitialized = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = '${AppStrings.cameraError}: $e';
+          _isInitialized = false;
+        });
+      }
+      throw e; // Rethrow for retry mechanism
     }
   }
 
-  void _startScanCountdown() {
-    setState(() {
-      _countdown = AppConstants.preparationTime;
-      _showTargetText = true;
-      _isScanning = false;
-    });
-
-    _countdownTimer?.cancel();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        if (_countdown > 1) {
-          _countdown--;
-        } else {
-          _countdownTimer?.cancel();
-          _startScanning();
-        }
-      });
-    });
-  }
-
-  void _startScanning() {
-    setState(() {
-      _isScanning = true;
-      _showTargetText = true;
-      _allDetections = [];
-    });
-
-    // Hide target text after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showTargetText = false;
-        });
-      }
-    });
-
-    _scanTimer?.cancel();
-    // Set overall scan duration
-    _scanTimer = Timer(Duration(seconds: AppConstants.scanDuration), () {
-      _stopScanning();
-    });
-
-    _frameTimer?.cancel();
-    // Process frames every 500ms
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      _processFrame();
-    });
-  }
-
-  Future<void> _processFrame() async {
-    if (_isProcessing || !_isScanning) return;
-
-    setState(() {
-      _isProcessing = true;
-    });
+  Future<void> _startRecording() async {
+    if (!_isInitialized || _cameraService.controller == null) return;
 
     try {
-      File frameImage = await _cameraService.captureVideoFrame();
-      final detectionResponse = await _apiService.processVideoFrame(frameImage);
+      await _cameraService.controller!.startVideoRecording();
 
-      // Add new detections to the list
-      if (detectionResponse.results.isNotEmpty) {
+      setState(() {
+        _isRecording = true;
+        _countdown = _recordingDuration;
+      });
+
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
         setState(() {
-          _detectionResponse = detectionResponse;
-          _allDetections.addAll(detectionResponse.results);
+          if (_countdown > 0) {
+            _countdown--;
+          } else {
+            _stopRecording();
+            _countdownTimer?.cancel();
+          }
         });
-      }
+      });
+
+      // Set timer to stop recording after duration
+      _recordingTimer = Timer(Duration(seconds: _recordingDuration), () {
+        if (mounted) {
+          _stopRecording();
+        }
+      });
     } catch (e) {
-      print('Error processing frame: $e');
-    } finally {
+      print('Error starting video recording: $e');
       if (mounted) {
         setState(() {
-          _isProcessing = false;
+          _errorMessage = 'Failed to start recording: $e';
         });
       }
     }
   }
 
-  void _stopScanning() {
-    _scanTimer?.cancel();
-    _frameTimer?.cancel();
+  Future<void> _stopRecording() async {
+    if (!_isRecording || _cameraService.controller == null) return;
 
-    setState(() {
-      _isScanning = false;
-      _resultDisplayTime = AppConstants.resultDisplayTime;
+    _recordingTimer?.cancel();
+    _countdownTimer?.cancel();
 
-      if (_allDetections.isNotEmpty) {
-        _detectionResponse = DetectionResponse(
-          results: _allDetections,
-          message: AppStrings.detectionResults,
-        );
-      }
-    });
+    try {
+      final video = await _cameraService.controller!.stopVideoRecording();
 
-    // Start result display countdown
-    _resultDisplayTimer?.cancel();
-    _resultDisplayTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+
       setState(() {
-        if (_resultDisplayTime > 1) {
-          _resultDisplayTime--;
-        } else {
-          _resultDisplayTimer?.cancel();
-        }
+        _isRecording = false;
+        _videoFile = video;
       });
-    });
+
+      // Navigate to results screen with video file
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResultsScreen(videoFile: _videoFile),
+        ),
+      );
+    } catch (e) {
+      print('Error stopping video recording: $e');
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _errorMessage = 'Failed to stop recording: $e';
+        });
+      }
+    }
   }
 
-  void _retry() {
-    _resultDisplayTimer?.cancel();
-    _startScanCountdown();
+  void _stopRecordingIfNeeded() {
+    if (_isRecording && _cameraService.controller != null) {
+      _cameraService.controller!.stopVideoRecording().then((XFile file) {
+        if (mounted) {
+          setState(() {
+            _isRecording = false;
+            _videoFile = file;
+          });
+        }
+      }).catchError((e) {
+        print('Error stopping recording: $e');
+      });
+    }
+
+    _recordingTimer?.cancel();
+    _countdownTimer?.cancel();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraService.dispose();
-    _scanTimer?.cancel();
-    _frameTimer?.cancel();
+    _stopRecordingIfNeeded();
+    _recordingTimer?.cancel();
     _countdownTimer?.cancel();
-    _resultDisplayTimer?.cancel();
+    _cameraService.dispose();
     super.dispose();
   }
 
@@ -251,7 +265,7 @@ class _ScanModeScreenState extends State<ScanModeScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
+              const Icon(
                 Icons.error_outline,
                 color: Colors.red,
                 size: 48,
@@ -269,7 +283,10 @@ class _ScanModeScreenState extends State<ScanModeScreen>
               CustomButton(
                 text: AppStrings.retryButton,
                 icon: Icons.refresh,
-                onPressed: _initializeCamera,
+                onPressed: () {
+                  _initRetryCount = 0;
+                  _initializeWithRetry();
+                },
               ),
               const SizedBox(height: 16),
               CustomButton(
@@ -307,113 +324,54 @@ class _ScanModeScreenState extends State<ScanModeScreen>
             alignment: Alignment.center,
             children: [
               // Camera preview
-              AspectRatio(
+              _cameraService.controller != null
+                  ? AspectRatio(
                 aspectRatio: _cameraService.controller!.value.aspectRatio,
                 child: CameraPreview(_cameraService.controller!),
-              ),
+              )
+                  : Container(color: Colors.black),
 
-              // Overlay for scanning
-              if (_isScanning)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppTheme.primaryColor,
-                      width: 4,
-                    ),
-                  ),
-                ),
-
-              // Target text overlay
-              if (_showTargetText && _isScanning)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    AppStrings.targetObjectText,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-
-              // Countdown overlay
-              if (_countdown > 0 && !_isScanning)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$_countdown',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 60,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Get ready...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Loading indicator during processing
-              if (_isProcessing)
-                const LoadingIndicator(
-                  message: AppStrings.processingVideo,
-                ),
-
-              // Real-time detection overlay
-              if (_isScanning && _detectionResponse != null)
+              // Recording indicator
+              if (_isRecording)
                 Positioned(
-                  top: 16,
-                  left: 16,
-                  right: 16,
+                  top: 20,
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          AppStrings.detectionResults,
-                          style: TextStyle(
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Recording: $_countdown s',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        ..._allDetections.take(3).map((detection) => Text(
-                          '${detection.objectType} (${(detection.confidence * 100).toStringAsFixed(0)}%)',
-                          style: TextStyle(
-                            color: _isRecyclable(detection)
-                                ? Colors.green
-                                : Colors.red,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        )),
                       ],
+                    ),
+                  ),
+                ),
+
+              // Recording frame indicator
+              if (_isRecording)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.red,
+                      width: 4,
                     ),
                   ),
                 ),
@@ -421,82 +379,25 @@ class _ScanModeScreenState extends State<ScanModeScreen>
           ),
         ),
 
-        // Results area or controls
+        // Controls area
         Container(
           color: Colors.grey[200],
           padding: const EdgeInsets.all(16),
-          child: _isScanning
-              ? _buildScanningControls()
-              : _detectionResponse != null
-              ? _buildResultsView()
-              : _buildInitialControls(),
+          child: _isRecording ? _buildRecordingControls() : _buildInitialControls(),
         ),
       ],
     );
   }
 
-  bool _isRecyclable(DetectionResult detection) {
-    // Check if the recyclable category indicates it's recyclable
-    // This is a simple implementation - adjust based on your recyclable categories
-    return detection.recyclableCategory.toLowerCase() != 'non-recyclable' &&
-        detection.recyclableCategory.toLowerCase() != 'unknown';
-  }
-
-  Widget _buildScanningControls() {
+  Widget _buildRecordingControls() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          'Scanning...',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
         CustomButton(
-          text: 'Stop',
+          text: 'Stop Recording',
           icon: Icons.stop,
           type: ButtonType.warning,
-          onPressed: _stopScanning,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildResultsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        DetectionResultDisplay(detectionResponse: _detectionResponse!),
-        const SizedBox(height: 12),
-        Text(
-          '${_allDetections.length} ${AppStrings.itemsDetected}',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontStyle: FontStyle.italic),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            CustomButton(
-              text: AppStrings.retryButton,
-              icon: Icons.refresh,
-              onPressed: _retry,
-            ),
-            CustomButton(
-              text: AppStrings.pictureMode,
-              icon: Icons.camera_alt,
-              type: ButtonType.secondary,
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PictureModeScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
+          onPressed: _stopRecording,
         ),
       ],
     );
@@ -507,15 +408,15 @@ class _ScanModeScreenState extends State<ScanModeScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          AppStrings.scanModeHelp,
+          "Point the camera at your object and press Record to capture a 5-second video",
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 16),
         ),
         const SizedBox(height: 16),
         CustomButton(
-          text: "Start Scanning",
-          icon: Icons.camera,
-          onPressed: _startScanCountdown,
+          text: "Start Recording",
+          icon: Icons.videocam,
+          onPressed: _startRecording,
         ),
         const SizedBox(height: 12),
         CustomButton(

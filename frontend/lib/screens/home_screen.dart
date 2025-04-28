@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:frontend/constants/strings.dart';
 import 'package:frontend/screens/picture_mode_screen.dart';
 import 'package:frontend/screens/scan_mode_screen.dart';
@@ -15,28 +14,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final FlutterTts flutterTts = FlutterTts();
-
   @override
   void initState() {
     super.initState();
-    _initTts();
-  }
-
-  Future<void> _initTts() async {
-    await flutterTts.setLanguage("en-US");
-    await flutterTts.setSpeechRate(0.5);
-    await flutterTts.setVolume(1.0);
-    await flutterTts.setPitch(1.0);
-  }
-
-  Future<void> _speak(String text) async {
-    await flutterTts.speak(text);
   }
 
   @override
   void dispose() {
-    flutterTts.stop();
     super.dispose();
   }
 
@@ -64,22 +48,11 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(helpText),
-              const SizedBox(height: 16),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    _speak(helpText);
-                  },
-                  icon: const Icon(Icons.volume_up),
-                  label: const Text("Read Aloud"),
-                ),
-              ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () {
-                flutterTts.stop();
                 Navigator.of(context).pop();
               },
               child: const Text("Close"),

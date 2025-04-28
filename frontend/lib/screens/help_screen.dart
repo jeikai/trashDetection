@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:frontend/constants/strings.dart';
 import 'package:frontend/config/theme.dart';
 
@@ -18,45 +17,13 @@ class HelpScreen extends StatefulWidget {
 }
 
 class _HelpScreenState extends State<HelpScreen> {
-  final FlutterTts flutterTts = FlutterTts();
-  bool isSpeaking = false;
-
   @override
   void initState() {
     super.initState();
-    _initTts();
-  }
-
-  Future<void> _initTts() async {
-    await flutterTts.setLanguage("en-US");
-    await flutterTts.setSpeechRate(0.5);
-    await flutterTts.setVolume(1.0);
-    await flutterTts.setPitch(1.0);
-
-    flutterTts.setCompletionHandler(() {
-      setState(() {
-        isSpeaking = false;
-      });
-    });
-  }
-
-  Future<void> _speak() async {
-    if (isSpeaking) {
-      await flutterTts.stop();
-      setState(() {
-        isSpeaking = false;
-      });
-    } else {
-      setState(() {
-        isSpeaking = true;
-      });
-      await flutterTts.speak(widget.helpText);
-    }
   }
 
   @override
   void dispose() {
-    flutterTts.stop();
     super.dispose();
   }
 
@@ -105,12 +72,6 @@ class _HelpScreenState extends State<HelpScreen> {
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up),
-                        onPressed: _speak,
-                        color: AppTheme.primaryColor,
                       ),
                     ],
                   ),
