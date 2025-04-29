@@ -221,7 +221,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'No analysis data available. The analysis may have completed without results.',
+            'No analysis data available. The video was processed successfully, but no detailed results were returned.',
             style: TextStyle(fontSize: 16),
             textAlign: TextAlign.center,
           ),
@@ -229,6 +229,32 @@ class _ResultsScreenState extends State<ResultsScreen> {
       );
     }
 
+    // Handle simple message response from backend
+    if (_analysisResults!.containsKey('message') && _analysisResults!.length == 1) {
+      return Card(
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _analysisResults!['message'],
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Handle full results if backend returns detailed analysis
     return Card(
       elevation: 4,
       child: Padding(

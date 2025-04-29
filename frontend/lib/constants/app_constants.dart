@@ -1,6 +1,6 @@
 class AppConstants {
   // API endpoint
-  static const String baseUrl = 'http://localhost:7810/api/v1/';
+  static const String baseUrl = 'http://localhost:7810/';
   static const String detectEndpoint = '/detect';
   static const String streamEndpoint = '/stream';
 

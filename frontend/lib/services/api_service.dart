@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:http/http.dart' as http;
 import 'package:frontend/constants/app_constants.dart';
 import 'package:frontend/models/detection_result.dart';
 
@@ -28,6 +27,7 @@ class ApiService {
     try {
       FormData formData = FormData();
 
+      // Add all images to the form data with field name 'images'
       for (int i = 0; i < images.length; i++) {
         formData.files.add(
           MapEntry(
@@ -41,15 +41,62 @@ class ApiService {
       }
 
       final response = await _dio.post(
-        AppConstants.detectEndpoint,
+        '/image', // Matches backend route
         data: formData,
       );
 
-      return DetectionResponse.fromJson(response.data);
+      if (response.statusCode == 200) {
+        // Backend returns a simple success message, so we'll create a DetectionResponse
+        return DetectionResponse(
+          results: [], // We'll need to update this if backend provides detection results
+          message: response.data ?? 'Images uploaded successfully',
+        );
+      } else {
+        throw Exception('Failed to process images: ${response.statusCode}');
+      }
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
       throw Exception('Failed to process images: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> analyzeVideo(File videoFile) async {
+    try {
+      // Create a multipart form data with Dio
+      FormData formData = FormData();
+      formData.files.add(
+        MapEntry(
+          'video', // Matches backend parameter name
+          await MultipartFile.fromFile(
+            videoFile.path,
+            filename: 'video.mp4',
+          ),
+        ),
+      );
+
+      final response = await _dio.post(
+        '/video', // Matches backend route
+        data: formData,
+      );
+
+      if (response.statusCode == 200) {
+        // According to backend, it returns { message: result.message }
+        if (response.data is Map<String, dynamic>) {
+          return response.data;
+        } else {
+          // Convert string response to map if needed
+          return {'message': response.data.toString()};
+        }
+      } else {
+        throw Exception('Failed to analyze video: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error analyzing video: $e');
+      if (e is DioException) {
+        throw _handleDioError(e);
+      }
+      throw Exception('Failed to analyze video: $e');
     }
   }
 
@@ -58,7 +105,7 @@ class ApiService {
       FormData formData = FormData();
       formData.files.add(
         MapEntry(
-          'frame',
+          'images', // Changed to match backend naming
           await MultipartFile.fromFile(
             frameImage.path,
             filename: 'frame.jpg',
@@ -67,11 +114,19 @@ class ApiService {
       );
 
       final response = await _dio.post(
-        AppConstants.streamEndpoint,
+        '/image', // Matches backend route
         data: formData,
       );
 
-      return DetectionResponse.fromJson(response.data);
+      if (response.statusCode == 200) {
+        // Backend currently returns a simple success message
+        return DetectionResponse(
+          results: [], // We'll need to update this if backend provides detection results
+          message: response.data ?? 'Frame processed successfully',
+        );
+      } else {
+        throw Exception('Failed to process video frame: ${response.statusCode}');
+      }
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
@@ -91,40 +146,6 @@ class ApiService {
       return Exception('Request cancelled');
     } else {
       return Exception('Network error: ${e.message}');
-    }
-  }
-
-  Future<Map<String, dynamic>> analyzeVideo(File videoFile) async {
-    try {
-      // Create a multipart form data with Dio
-      FormData formData = FormData();
-      formData.files.add(
-        MapEntry(
-          'video',
-          await MultipartFile.fromFile(
-            videoFile.path,
-            filename: 'video.mp4',
-          ),
-        ),
-      );
-
-      final response = await _dio.post(
-        '/analyze-video',
-        data: formData,
-      );
-
-      if (response.statusCode == 200) {
-        return response.data;
-      } else {
-        throw Exception(
-            'Failed to analyze video: ${response.statusCode}, ${response.data}');
-      }
-    } catch (e) {
-      print('Error analyzing video: $e');
-      if (e is DioException) {
-        throw _handleDioError(e);
-      }
-      throw Exception('Failed to analyze video: $e');
     }
   }
 }
