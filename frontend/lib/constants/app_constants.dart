@@ -1,8 +1,8 @@
 class AppConstants {
-  // API endpoint
-  static const String baseUrl = 'http://localhost:7810/';
-  static const String detectEndpoint = '/detect';
-  static const String streamEndpoint = '/stream';
+  // API endpoint - Updated to match backend
+  static const String baseUrl = 'http://192.168.40.222:7810';
+
+  // Removed unused endpoints as backend uses direct routes /image and /video
 
   // Timeouts
   static const int connectionTimeout = 30000;  // 30 seconds

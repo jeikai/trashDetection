@@ -46,10 +46,9 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // Backend returns a simple success message, so we'll create a DetectionResponse
         return DetectionResponse(
-          results: [], // We'll need to update this if backend provides detection results
-          message: response.data ?? 'Images uploaded successfully',
+          results: [], // Empty results since backend doesn't return detection data yet
+          message: response.data.toString(),
         );
       } else {
         throw Exception('Failed to process images: ${response.statusCode}');
@@ -81,7 +80,6 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // According to backend, it returns { message: result.message }
         if (response.data is Map<String, dynamic>) {
           return response.data;
         } else {
@@ -105,7 +103,7 @@ class ApiService {
       FormData formData = FormData();
       formData.files.add(
         MapEntry(
-          'images', // Changed to match backend naming
+          'images', // Using 'images' to match backend naming
           await MultipartFile.fromFile(
             frameImage.path,
             filename: 'frame.jpg',
@@ -114,15 +112,14 @@ class ApiService {
       );
 
       final response = await _dio.post(
-        '/image', // Matches backend route
+        '/image', // Using '/image' endpoint for frame processing
         data: formData,
       );
 
       if (response.statusCode == 200) {
-        // Backend currently returns a simple success message
         return DetectionResponse(
-          results: [], // We'll need to update this if backend provides detection results
-          message: response.data ?? 'Frame processed successfully',
+          results: [], // Empty results as backend doesn't return detection data
+          message: response.data.toString(),
         );
       } else {
         throw Exception('Failed to process video frame: ${response.statusCode}');
