@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const extractVideoToFrames = require("./services/VideoExtracter");
+const getImgClassification = require("./services/ApiService");
 const app = express();
 const cors = require("cors");
 const storage = multer.diskStorage({
@@ -35,17 +36,39 @@ app.post("/video", upload.single("video"), async (req, res) => {
   const outputDir = "uploads/frames";
   try {
     const result = await extractVideoToFrames(videoPath, outputDir);
-    res.status(200).json({ message: result.message });
+    const classifyImages = await getImgClassification(
+      result.framePaths,
+      videoPath
+    );
+    res.status(200).json({
+      message: "Video processed successfully",
+      images: classifyImages.image_base64,
+    });
+    result.framePaths.forEach((imgPath) => {
+      fs.unlinkSync(imgPath);
+    });
+    fs.unlinkSync(videoPath);
   } catch (e) {
-    console.error(error);
-    res.status(500).json("Error extracting frames");
+    console.error(e);
+    res.status(500).json(`Error: ${e.message}`);
   }
 });
 
-app.post("/image", upload.any(), (req, res) => {
+app.post("/image", upload.any(), async (req, res) => {
   const images = req.files.map((file) => file.path);
-  console.log(images);
-  res.json("Images uploaded successfully");
+  try {
+    const classifyImg = await getImgClassification(images);
+    res.status(200).json({
+      message: "Images processed successfully",
+      images: classifyImg.image_base64,
+    });
+    images.forEach((imgPath) => {
+      fs.unlinkSync(imgPath);
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json(`Error: ${e.message}`);
+  }
 });
 
 app.listen(7810, () => {
