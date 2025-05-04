@@ -36,6 +36,7 @@ app.post("/video", upload.single("video"), async (req, res) => {
   const outputDir = "uploads/frames";
   try {
     const result = await extractVideoToFrames(videoPath, outputDir);
+    console.log(result.framePaths);
     const classifyImages = await getImgClassification(
       result.framePaths,
       videoPath
@@ -44,12 +45,15 @@ app.post("/video", upload.single("video"), async (req, res) => {
       message: "Video processed successfully",
       images: classifyImages.image_base64,
     });
+    const frameDir = path.dirname(result.framePaths[0]);
     result.framePaths.forEach((imgPath) => {
       fs.unlinkSync(imgPath);
     });
+    if (fs.readdirSync(frameDir).length === 0) {
+      fs.rmdirSync(frameDir);
+    }
     fs.unlinkSync(videoPath);
   } catch (e) {
-    console.error(e);
     res.status(500).json(`Error: ${e.message}`);
   }
 });

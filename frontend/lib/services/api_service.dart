@@ -47,10 +47,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // Backend returns a simple success message, so we'll create a DetectionResponse
-        return DetectionResponse(
-          results: [], // We'll need to update this if backend provides detection results
-          message: response.data ?? 'Images uploaded successfully',
-        );
+        return DetectionResponse.fromJson(response.data);
       } else {
         throw Exception('Failed to process images: ${response.statusCode}');
       }
@@ -61,7 +58,7 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> analyzeVideo(File videoFile) async {
+  Future<DetectionResponse> analyzeVideo(File videoFile) async {
     try {
       // Create a multipart form data with Dio
       FormData formData = FormData();
@@ -82,12 +79,7 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // According to backend, it returns { message: result.message }
-        if (response.data is Map<String, dynamic>) {
-          return response.data;
-        } else {
-          // Convert string response to map if needed
-          return {'message': response.data.toString()};
-        }
+        return DetectionResponse.fromJson(response.data);
       } else {
         throw Exception('Failed to analyze video: ${response.statusCode}');
       }
@@ -120,12 +112,10 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // Backend currently returns a simple success message
-        return DetectionResponse(
-          results: [], // We'll need to update this if backend provides detection results
-          message: response.data ?? 'Frame processed successfully',
-        );
+        return DetectionResponse.fromJson(response.data);
       } else {
-        throw Exception('Failed to process video frame: ${response.statusCode}');
+        throw Exception(
+            'Failed to process video frame: ${response.statusCode}');
       }
     } on DioException catch (e) {
       throw _handleDioError(e);

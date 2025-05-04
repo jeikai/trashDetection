@@ -15,44 +15,39 @@ class DetectionResult {
     return DetectionResult(
       objectType: json['object_type'] ?? 'Unknown',
       recyclableCategory: json['recyclable_category'] ?? 'Unknown',
-      confidence: (json['confidence'] != null) ? (json['confidence'] * 1.0) : 0.0,
+      confidence:
+          (json['confidence'] != null) ? (json['confidence'] * 1.0) : 0.0,
       boundingBox: json['bounding_box'],
     );
   }
 }
 
 class DetectionResponse {
-  final List<DetectionResult> results;
-  final String? processedImageUrl;
   final String message;
+  final List<String> images;
 
   DetectionResponse({
-    required this.results,
-    this.processedImageUrl,
     required this.message,
+    required this.images,
   });
 
   factory DetectionResponse.fromJson(Map<String, dynamic> json) {
-    List<DetectionResult> resultsList = [];
-    if (json['results'] != null && json['results'] is List) {
-      resultsList = (json['results'] as List)
-          .map((item) => DetectionResult.fromJson(item))
-          .toList();
+    List<String> imagesList = [];
+    if (json['images'] != null && json['images'] is List) {
+      imagesList = List<String>.from(json['images']);
     }
 
     return DetectionResponse(
-      results: resultsList,
-      processedImageUrl: json['processed_image_url'],
-      message: json['message'] ?? 'Detection completed',
+      message: json['message'],
+      images: imagesList,
     );
   }
 
   // Helper method for when backend returns simple string responses
   factory DetectionResponse.fromMessage(String message) {
     return DetectionResponse(
-      results: [],
-      processedImageUrl: null,
       message: message,
+      images: [],
     );
   }
 }
