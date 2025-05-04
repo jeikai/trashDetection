@@ -36,7 +36,6 @@ app.post("/video", upload.single("video"), async (req, res) => {
   const outputDir = "uploads/frames";
   try {
     const result = await extractVideoToFrames(videoPath, outputDir);
-    console.log(result.framePaths);
     const classifyImages = await getImgClassification(
       result.framePaths,
       videoPath
