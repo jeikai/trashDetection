@@ -16,7 +16,7 @@ class DetectionResult {
       objectType: json['object_type'] ?? 'Unknown',
       recyclableCategory: json['recyclable_category'] ?? 'Unknown',
       confidence:
-          (json['confidence'] != null) ? (json['confidence'] * 1.0) : 0.0,
+      (json['confidence'] != null) ? (json['confidence'] * 1.0) : 0.0,
       boundingBox: json['bounding_box'],
     );
   }
@@ -24,22 +24,34 @@ class DetectionResult {
 
 class DetectionResponse {
   final String message;
-  final List<String> images;
+  final List<String> imageBase64;
+  final List<DetectionResult> results;
 
   DetectionResponse({
     required this.message,
-    required this.images,
+    required this.imageBase64,
+    this.results = const [],
   });
 
   factory DetectionResponse.fromJson(Map<String, dynamic> json) {
+    // Handle images field - it contains base64 image data
     List<String> imagesList = [];
     if (json['images'] != null && json['images'] is List) {
       imagesList = List<String>.from(json['images']);
     }
 
+    // Handle results if they exist in the response
+    List<DetectionResult> resultsList = [];
+    if (json['results'] != null && json['results'] is List) {
+      resultsList = List<DetectionResult>.from(
+        json['results'].map((result) => DetectionResult.fromJson(result)),
+      );
+    }
+
     return DetectionResponse(
-      message: json['message'],
-      images: imagesList,
+      message: json['message'] ?? '',
+      imageBase64: imagesList,
+      results: resultsList,
     );
   }
 
@@ -47,7 +59,7 @@ class DetectionResponse {
   factory DetectionResponse.fromMessage(String message) {
     return DetectionResponse(
       message: message,
-      images: [],
+      imageBase64: [],
     );
   }
 }

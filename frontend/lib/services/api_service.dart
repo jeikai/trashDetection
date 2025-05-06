@@ -27,11 +27,11 @@ class ApiService {
     try {
       FormData formData = FormData();
 
-      // Add all images to the form data with field name 'images'
+      // Using the field name expected by the backend (should match the Node.js req.files)
       for (int i = 0; i < images.length; i++) {
         formData.files.add(
           MapEntry(
-            'images',
+            'images', // This should match what the Node.js backend expects
             await MultipartFile.fromFile(
               images[i].path,
               filename: 'image_$i.jpg',
@@ -46,7 +46,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // Backend returns a simple success message, so we'll create a DetectionResponse
+        // Parse the response which should include base64 images
         return DetectionResponse.fromJson(response.data);
       } else {
         throw Exception('Failed to process images: ${response.statusCode}');
@@ -78,7 +78,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // According to backend, it returns { message: result.message }
+        // Parse the response which should include base64 images from video frames
         return DetectionResponse.fromJson(response.data);
       } else {
         throw Exception('Failed to analyze video: ${response.statusCode}');
@@ -97,7 +97,7 @@ class ApiService {
       FormData formData = FormData();
       formData.files.add(
         MapEntry(
-          'images', // Changed to match backend naming
+          'images', // Field name expected by the Node.js backend
           await MultipartFile.fromFile(
             frameImage.path,
             filename: 'frame.jpg',
@@ -111,7 +111,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        // Backend currently returns a simple success message
+        // Parse the response which should include base64 images
         return DetectionResponse.fromJson(response.data);
       } else {
         throw Exception(

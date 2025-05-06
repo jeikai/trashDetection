@@ -1,8 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:frontend/models/detection_result.dart';
 import 'package:frontend/config/theme.dart';
 import 'package:frontend/constants/strings.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class DetectionResultDisplay extends StatelessWidget {
   final DetectionResponse detectionResponse;
@@ -41,7 +41,7 @@ class DetectionResultDisplay extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${detectionResponse.results.length} ${AppStrings.itemsDetected}',
+                '${detectionResponse.imageBase64.length}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -51,74 +51,140 @@ class DetectionResultDisplay extends StatelessWidget {
           ),
         ),
 
-        // Processed image if available
-        if (detectionResponse.processedImageUrl != null)
+        // Display processed images from base64 data
+        if (detectionResponse.imageBase64.isNotEmpty)
           Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-            ),
-            child: CachedNetworkImage(
-              imageUrl: detectionResponse.processedImageUrl!,
-              fit: BoxFit.contain,
-              placeholder: (context, url) => const Center(
-                child: CircularProgressIndicator(),
-              ),
-              errorWidget: (context, url, error) => const Center(
-                child: Icon(Icons.error),
-              ),
+            height: 250,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: detectionResponse.imageBase64.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _buildBase64Image(detectionResponse.imageBase64[index]),
+                );
+              },
             ),
           ),
 
-        // Results list
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, 2),
+        // Results list if available
+        if (detectionResponse.results.isNotEmpty)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
               ),
-            ],
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: detectionResponse.results.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final result = detectionResponse.results[index];
-              return ListTile(
-                leading: _buildRecyclableIcon(result.recyclableCategory),
-                title: Text(
-                  result.objectType,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: detectionResponse.results.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final result = detectionResponse.results[index];
+                return ListTile(
+                  leading: _buildRecyclableIcon(result.recyclableCategory),
+                  title: Text(
+                    result.objectType,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                subtitle: Text(
-                  'Category: ${result.recyclableCategory}',
-                ),
-                trailing: Text(
-                  '${(result.confidence * 100).toStringAsFixed(1)}%',
-                  style: TextStyle(
-                    color: _getConfidenceColor(result.confidence),
-                    fontWeight: FontWeight.bold,
+                  subtitle: Text(
+                    'Category: ${result.recyclableCategory}',
                   ),
+                  trailing: Text(
+                    '${(result.confidence * 100).toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      color: _getConfidenceColor(result.confidence),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        else
+        // Display message only when no specific results
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 2),
                 ),
-              );
-            },
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Analysis Results',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  detectionResponse.message,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
+  }
+
+  Widget _buildBase64Image(String base64String) {
+    try {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          width: 200,
+          height: 200,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 200,
+              height: 200,
+              color: Colors.grey[300],
+              child: const Center(
+                child: Icon(Icons.error, color: Colors.red, size: 40),
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      return Container(
+        width: 200,
+        height: 200,
+        color: Colors.grey[300],
+        child: const Center(
+          child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
+        ),
+      );
+    }
   }
 
   Widget _buildRecyclableIcon(String category) {
