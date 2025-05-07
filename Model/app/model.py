@@ -18,7 +18,7 @@ def predict_image_with_boxes(image: Image.Image):
         x1, y1, x2, y2, conf, cls = box
         x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
         class_id = int(cls)
-        label = f"{class_names[class_id]} {conf:.2f}"
+        label = f"{class_names[class_id - 1]} {conf:.2f}"
         print(class_id)
 
         cv2.rectangle(image_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)

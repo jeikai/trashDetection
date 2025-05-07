@@ -20,6 +20,15 @@ class ApiService {
     _dio.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
+      logPrint: (obj) {
+        // Custom log print function to avoid truncation of base64 data
+        // Only print the first part of the response body if it's too long
+        if (obj.toString().length > 200 && obj.toString().contains('base64')) {
+          print('${obj.toString().substring(0, 200)}... [truncated]');
+        } else {
+          print(obj);
+        }
+      },
     ));
   }
 
@@ -47,13 +56,15 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // Parse the response which should include base64 images
-        return DetectionResponse.fromJson(response.data);
+        print("Response received with status 200");
+        return _parseResponse(response.data);
       } else {
         throw Exception('Failed to process images: ${response.statusCode}');
       }
     } on DioException catch (e) {
       throw _handleDioError(e);
     } catch (e) {
+      print("Error in detectFromImages: $e");
       throw Exception('Failed to process images: $e');
     }
   }
@@ -79,7 +90,8 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // Parse the response which should include base64 images from video frames
-        return DetectionResponse.fromJson(response.data);
+        print("Video analysis response received with status 200");
+        return _parseResponse(response.data);
       } else {
         throw Exception('Failed to analyze video: ${response.statusCode}');
       }
@@ -112,7 +124,8 @@ class ApiService {
 
       if (response.statusCode == 200) {
         // Parse the response which should include base64 images
-        return DetectionResponse.fromJson(response.data);
+        print("Frame processing response received with status 200");
+        return _parseResponse(response.data);
       } else {
         throw Exception(
             'Failed to process video frame: ${response.statusCode}');
@@ -124,6 +137,29 @@ class ApiService {
     }
   }
 
+  // Helper method to parse API responses
+  DetectionResponse _parseResponse(dynamic data) {
+    // Check if the response is a string (some APIs might return plain text)
+    if (data is String) {
+      try {
+        // Try to parse as JSON first
+        Map<String, dynamic> jsonData = json.decode(data);
+        return DetectionResponse.fromJson(jsonData);
+      } catch (e) {
+        // If not JSON, just use the string as a message
+        return DetectionResponse.fromMessage(data);
+      }
+    }
+    // Already a Map (Dio usually converts JSON responses to maps)
+    else if (data is Map<String, dynamic>) {
+      return DetectionResponse.fromJson(data);
+    }
+    // Fallback for unexpected response types
+    else {
+      return DetectionResponse.fromMessage('Unexpected response format');
+    }
+  }
+
   Exception _handleDioError(DioException e) {
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
@@ -131,7 +167,16 @@ class ApiService {
       return Exception(
           'Connection timeout. Please check your internet connection.');
     } else if (e.type == DioExceptionType.badResponse) {
-      return Exception('Server error: ${e.response?.statusCode}');
+      // Try to extract more detailed error message if available
+      String errorMsg = 'Server error: ${e.response?.statusCode}';
+      if (e.response?.data != null) {
+        if (e.response!.data is String) {
+          errorMsg += ' - ${e.response!.data}';
+        } else if (e.response!.data is Map && e.response!.data['message'] != null) {
+          errorMsg += ' - ${e.response!.data['message']}';
+        }
+      }
+      return Exception(errorMsg);
     } else if (e.type == DioExceptionType.cancel) {
       return Exception('Request cancelled');
     } else {

@@ -33,6 +33,7 @@ const upload = multer({ storage: storage });
 
 app.post("/video", upload.single("video"), async (req, res) => {
   const videoPath = req.file.path;
+  console.log(videoPath)
   const outputDir = "uploads/frames";
   try {
     const result = await extractVideoToFrames(videoPath, outputDir);

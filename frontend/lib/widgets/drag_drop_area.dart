@@ -66,7 +66,7 @@ class DragDropArea extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     ElevatedButton.icon(
                       onPressed: onTakePhotoPressed,
                       icon: const Icon(Icons.camera_alt),

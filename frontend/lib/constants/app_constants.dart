@@ -1,6 +1,6 @@
 class AppConstants {
   // API endpoint - Updated to match backend
-  static const String baseUrl = 'http://192.168.40.222:7810';
+  static const String baseUrl = 'http://192.168.99.66:7810';
 
   // Removed unused endpoints as backend uses direct routes /image and /video
 

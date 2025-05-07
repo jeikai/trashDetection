@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class DetectionResult {
   final String objectType;
   final String recyclableCategory;
@@ -15,8 +17,7 @@ class DetectionResult {
     return DetectionResult(
       objectType: json['object_type'] ?? 'Unknown',
       recyclableCategory: json['recyclable_category'] ?? 'Unknown',
-      confidence:
-      (json['confidence'] != null) ? (json['confidence'] * 1.0) : 0.0,
+      confidence: json['confidence'] != null ? (json['confidence'] * 1.0) : 0.0,
       boundingBox: json['bounding_box'],
     );
   }
@@ -36,8 +37,14 @@ class DetectionResponse {
   factory DetectionResponse.fromJson(Map<String, dynamic> json) {
     // Handle images field - it contains base64 image data
     List<String> imagesList = [];
-    if (json['images'] != null && json['images'] is List) {
-      imagesList = List<String>.from(json['images']);
+    if (json['images'] != null) {
+      if (json['images'] is List) {
+        // Handle when images is a list of base64 strings
+        imagesList = List<String>.from(json['images']);
+      } else if (json['images'] is String) {
+        // Handle when 'images' is a single base64 string
+        imagesList = [json['images']];
+      }
     }
 
     // Handle results if they exist in the response

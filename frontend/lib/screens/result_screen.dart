@@ -249,15 +249,39 @@ class _ResultsScreenState extends State<ResultsScreen> {
               scrollDirection: Axis.horizontal,
               itemCount: _detectionResponse!.imageBase64.length,
               itemBuilder: (context, index) {
-                return Card(
-                  margin: const EdgeInsets.only(right: 12),
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildBase64Image(_detectionResponse!.imageBase64[index]),
+                return GestureDetector(
+                  onTap: () => _showFullScreenImage(context, _detectionResponse!.imageBase64[index]),
+                  child: Card(
+                    margin: const EdgeInsets.only(right: 12),
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _buildBase64Image(_detectionResponse!.imageBase64[index]),
+                        ),
+                        // Add a subtle zoom icon overlay to indicate the image is tappable
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.zoom_in,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -402,6 +426,104 @@ class _ResultsScreenState extends State<ResultsScreen> {
         color: Colors.grey[200],
         child: const Center(
           child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
+        ),
+      );
+    }
+  }
+
+  void _showFullScreenImage(BuildContext context, String base64String) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: Colors.black.withOpacity(0.9),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Image with pinch to zoom functionality
+                InteractiveViewer(
+                  panEnabled: true,
+                  boundaryMargin: const EdgeInsets.all(20),
+                  minScale: 0.5,
+                  maxScale: 4,
+                  child: Hero(
+                    tag: base64String.hashCode.toString(),
+                    child: _buildFullScreenImage(base64String),
+                  ),
+                ),
+                // Close button
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFullScreenImage(String base64String) {
+    try {
+      return Image.memory(
+        base64Decode(base64String),
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[900],
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  SizedBox(height: 16),
+                  Text(
+                    'Failed to load image',
+                    style: TextStyle(color: Colors.white, fontSize: 18),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      print('Error decoding full screen base64 image: $e');
+      return Container(
+        color: Colors.grey[900],
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.broken_image, color: Colors.grey, size: 60),
+              SizedBox(height: 16),
+              Text(
+                'Invalid image data',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
         ),
       );
     }

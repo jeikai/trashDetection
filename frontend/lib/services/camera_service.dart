@@ -15,62 +15,62 @@ class CameraService {
     await dispose();
 
     try {
-      // First check if we can access the camera plugin at all
+      // Kiểm tra quyền truy cập camera
       try {
         _cameras = await availableCameras();
       } catch (e) {
-        print('Error accessing camera plugin: $e');
-        // Handle plugin missing case specifically
+        print('Lỗi truy cập plugin camera: $e');
         if (e.toString().contains('MissingPluginException')) {
-          throw Exception('Camera plugin not available. Please restart the app or check your installation.');
+          throw Exception('Plugin camera không khả dụng. Vui lòng khởi động lại ứng dụng hoặc kiểm tra cài đặt.');
         }
         rethrow;
       }
 
       if (_cameras == null || _cameras!.isEmpty) {
-        throw CameraException('No cameras available', 'No cameras found on device');
+        throw CameraException('Không có camera khả dụng', 'Không tìm thấy camera trên thiết bị');
       }
 
-      // Initialize the camera controller
+      // Cấu hình camera với độ phân giải cao nhất để tránh bóp ngang
       _controller = CameraController(
         _cameras!.first,
-        ResolutionPreset.high,
+        ResolutionPreset.max,
         enableAudio: true,
       );
 
       await _controller!.initialize();
+
       _isInitialized = true;
     } catch (e) {
       _isInitialized = false;
-      print('Camera initialization error: $e');
+      print('Lỗi khởi tạo camera: $e');
       throw e;
     }
   }
 
   Future<XFile?> takePicture() async {
     if (!_isInitialized || _controller == null) {
-      throw Exception('Camera not initialized');
+      throw Exception('Camera chưa được khởi tạo');
     }
 
     try {
       return await _controller!.takePicture();
     } on CameraException catch (e) {
-      print('Take picture error: ${e.description}');
-      throw Exception('Failed to take picture: ${e.description}');
+      print('Lỗi chụp ảnh: ${e.description}');
+      throw Exception('Không thể chụp ảnh: ${e.description}');
     }
   }
 
   Future<File> captureVideoFrame() async {
     if (!_isInitialized || _controller == null) {
-      throw Exception('Camera not initialized');
+      throw Exception('Camera chưa được khởi tạo');
     }
 
     try {
       XFile picture = await _controller!.takePicture();
       return File(picture.path);
     } on CameraException catch (e) {
-      print('Capture frame error: ${e.description}');
-      throw Exception('Failed to capture video frame: ${e.description}');
+      print('Lỗi chụp khung hình từ video: ${e.description}');
+      throw Exception('Không thể chụp khung hình từ video: ${e.description}');
     }
   }
 
@@ -81,7 +81,7 @@ class CameraService {
         _controller = null;
       }
     } catch (e) {
-      print('Error disposing camera controller: $e');
+      print('Lỗi giải phóng controller camera: $e');
     } finally {
       _isInitialized = false;
     }

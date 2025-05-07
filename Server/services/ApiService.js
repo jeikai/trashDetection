@@ -9,6 +9,7 @@ module.exports = async function getImgClassification(imgs) {
   });
 
   try {
+    console.log(formData)
     const response = await axios.post(
       "http://localhost:8000/predict/",
       formData,

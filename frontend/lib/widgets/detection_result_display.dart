@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:frontend/models/detection_result.dart';
 import 'package:frontend/config/theme.dart';
 import 'package:frontend/constants/strings.dart';
@@ -62,7 +63,10 @@ class DetectionResultDisplay extends StatelessWidget {
               itemBuilder: (context, index) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: _buildBase64Image(detectionResponse.imageBase64[index]),
+                  child: _buildBase64Image(
+                    context,
+                    detectionResponse.imageBase64[index],
+                  ),
                 );
               },
             ),
@@ -154,34 +158,100 @@ class DetectionResultDisplay extends StatelessWidget {
     );
   }
 
-  Widget _buildBase64Image(String base64String) {
+  Widget _buildBase64Image(BuildContext context, String base64String) {
     try {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          base64Decode(base64String),
-          fit: BoxFit.contain,
-          width: 200,
-          height: 200,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 200,
-              height: 200,
-              color: Colors.grey[300],
-              child: const Center(
-                child: Icon(Icons.error, color: Colors.red, size: 40),
+      // Clean the base64 string - remove any prefixes or whitespace
+      String cleanBase64 = base64String.trim();
+
+      // Check if the string starts with data URI prefix
+      if (cleanBase64.startsWith('data:image')) {
+        // Extract the actual base64 data after the comma
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+
+      // Handle possible padding issues
+      while (cleanBase64.length % 4 != 0) {
+        cleanBase64 += '=';
+      }
+
+      return GestureDetector(
+        onTap: () {
+          // Navigate to full screen image viewer
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FullScreenImageViewer(base64Image: cleanBase64),
+            ),
+          );
+        },
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(
+                base64Decode(cleanBase64),
+                fit: BoxFit.contain,
+                width: 200,
+                height: 200,
+                errorBuilder: (context, error, stackTrace) {
+                  print("Error decoding base64 image: $error");
+                  return Container(
+                    width: 200,
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.error, color: Colors.red, size: 40),
+                          SizedBox(height: 8),
+                          Text(
+                            'Error loading image',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+            // Add a small icon to indicate the image is tappable
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              margin: const EdgeInsets.all(8),
+              child: const Icon(
+                Icons.fullscreen,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+          ],
         ),
       );
     } catch (e) {
+      print("Exception when processing base64 image: $e");
       return Container(
         width: 200,
         height: 200,
         color: Colors.grey[300],
         child: const Center(
-          child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image, color: Colors.grey, size: 40),
+              SizedBox(height: 8),
+              Text(
+                'Invalid image data',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -239,5 +309,56 @@ class DetectionResultDisplay extends StatelessWidget {
     } else {
       return Colors.red;
     }
+  }
+}
+
+/// Full screen image viewer widget
+class FullScreenImageViewer extends StatelessWidget {
+  final String base64Image;
+
+  const FullScreenImageViewer({
+    Key? key,
+    required this.base64Image,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Image Viewer',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          // Add share button
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () {
+              // Implement share functionality here if needed
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Share functionality to be implemented')),
+              );
+            },
+          ),
+        ],
+      ),
+      backgroundColor: Colors.black,
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          boundaryMargin: const EdgeInsets.all(20),
+          minScale: 0.5,
+          maxScale: 4,
+          child: Image.memory(
+            base64Decode(base64Image),
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+        ),
+      ),
+    );
   }
 }
