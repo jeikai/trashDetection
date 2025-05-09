@@ -4,4 +4,3 @@ pillow
 python-multipart
 numpy
 opencv-python
-ultralytics
